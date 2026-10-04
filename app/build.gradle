@@ -11,11 +11,11 @@ android {
     buildToolsVersion "36.1.0"
 
     defaultConfig {
-        applicationId "io.github.lsposed.disableflagsecure"
+        applicationId "io.github.lsposed.disableflagsecure.silent"
         minSdkVersion 31
         targetSdkVersion 37
         versionCode rootProject.ext.commitCount
-        versionName "5.0.1"
+        versionName "5.0.1-silent"
     }
 
     Properties localProperties = new Properties()

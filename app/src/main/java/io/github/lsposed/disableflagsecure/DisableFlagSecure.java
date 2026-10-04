@@ -181,6 +181,11 @@ public class DisableFlagSecure extends XposedModule {
                     }
                 }
             case SYSTEMUI:
+                try {
+                    hookScreenshotSound(classLoader);
+                } catch (Throwable t) {
+                    log(Log.ERROR, TAG, "hook ScreenshotSound failed", t);
+                }
             case MIUI_SCREENSHOT:
                 if (OPLUS_APPPLATFORM.equals(packageName) || OPLUS_SCREENSHOT.equals(packageName) ||
                         Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -449,6 +454,86 @@ public class DisableFlagSecure extends XposedModule {
         hookMethods(wmScreenshotControllerClazz, chain -> true, "canBeScreenshotTarget");
     }
 
+    private void hookScreenshotSound(ClassLoader classLoader) {
+        int hooks = 0;
+
+        // 1) Normal AOSP controller path. Android 15/16/current AOSP uses the zero-argument
+        // Java compatibility wrapper playScreenshotSoundAsync(). Older builds used playCameraSound().
+        try {
+            var controllerClazz = classLoader.loadClass(
+                    "com.android.systemui.screenshot.ScreenshotSoundControllerImpl");
+            for (var method : controllerClazz.getDeclaredMethods()) {
+                var name = method.getName();
+                if ((name.equals("playScreenshotSoundAsync") || name.equals("playCameraSound")) &&
+                        method.getParameterCount() == 0 && method.getReturnType() == void.class) {
+                    hook(method).intercept(chain -> null);
+                    hooks++;
+                    log(Log.INFO, TAG, "Muted SystemUI screenshot controller method: " + method);
+                }
+            }
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "ScreenshotSoundControllerImpl hook unavailable", t);
+        }
+
+        // 2) Older/vendor ScreenshotController implementations often have a tiny private wrapper.
+        // Hooking it is very narrow and bypasses whatever sound backend the OEM chose underneath.
+        try {
+            var screenshotControllerClazz = classLoader.loadClass(
+                    "com.android.systemui.screenshot.ScreenshotController");
+            for (var method : screenshotControllerClazz.getDeclaredMethods()) {
+                var name = method.getName();
+                if ((name.equals("playCameraSoundIfNeeded") ||
+                        name.equals("playScreenshotSoundIfNeeded")) &&
+                        method.getParameterCount() == 0 && method.getReturnType() == void.class) {
+                    hook(method).intercept(chain -> null);
+                    hooks++;
+                    log(Log.INFO, TAG, "Muted SystemUI ScreenshotController method: " + method);
+                }
+            }
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "ScreenshotController wrapper hook unavailable", t);
+        }
+
+        // 3) AOSP provider path. Returning null is tolerated by ScreenshotSoundControllerImpl,
+        // whose stored player is nullable and uses player.await()?.start().
+        try {
+            var providerClazz = classLoader.loadClass(
+                    "com.android.systemui.screenshot.ScreenshotSoundProviderImpl");
+            var method = providerClazz.getDeclaredMethod("getScreenshotSound");
+            hook(method).intercept(chain -> null);
+            hooks++;
+            log(Log.INFO, TAG, "Muted ScreenshotSoundProviderImpl.getScreenshotSound");
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "ScreenshotSoundProviderImpl hook unavailable", t);
+        }
+
+        // 4) OEM fallback: mute MediaPlayer starts *only inside the SystemUI process*.
+        // This is intentionally broader than the hooks above, but cannot affect apps, the camera
+        // process, music players, etc. It lets us catch Sony using a direct MediaPlayer path.
+        try {
+            var mediaPlayerClazz = classLoader.loadClass("android.media.MediaPlayer");
+            var method = mediaPlayerClazz.getDeclaredMethod("start");
+            hook(method).intercept(chain -> null);
+            hooks++;
+            log(Log.INFO, TAG, "Muted android.media.MediaPlayer.start in SystemUI");
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "SystemUI MediaPlayer.start hook unavailable", t);
+        }
+
+        // 5) OEM/forced-shutter fallback. Some screenshot implementations use MediaActionSound
+        // (SHUTTER_CLICK) instead of MediaPlayer. Again this hook exists only in SystemUI.
+        try {
+            var mediaActionSoundClazz = classLoader.loadClass("android.media.MediaActionSound");
+            var method = mediaActionSoundClazz.getDeclaredMethod("play", int.class);
+            hook(method).intercept(chain -> null);
+            hooks++;
+            log(Log.INFO, TAG, "Muted android.media.MediaActionSound.play in SystemUI");
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "SystemUI MediaActionSound.play hook unavailable", t);
+        }
+
+        log(Log.INFO, TAG, "Screenshot sound suppression hooks installed: " + hooks);
+    }
     private void hookMethods(Class<?> clazz, Hooker hooker, String... names) {
         var list = Arrays.asList(names);
         Arrays.stream(clazz.getDeclaredMethods())
