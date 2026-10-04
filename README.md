@@ -15,6 +15,14 @@ Compared with upstream **v5.0.1**, this fork adds:
 
 The additional audio hooks are limited to the **SystemUI process** and do not globally mute `MediaPlayer` or camera sounds in other applications.
 
+## Building
+
+The project includes a Docker-based build environment.
+
+Create `.build-signing.env` from the provided example and run:
+
+`./build-docker.sh`
+
 ## Compatibility
 
 ### Tested
