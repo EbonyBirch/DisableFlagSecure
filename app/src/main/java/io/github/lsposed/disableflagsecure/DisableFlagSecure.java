@@ -507,20 +507,7 @@ public class DisableFlagSecure extends XposedModule {
             log(Log.WARN, TAG, "ScreenshotSoundProviderImpl hook unavailable", t);
         }
 
-        // 4) OEM fallback: mute MediaPlayer starts *only inside the SystemUI process*.
-        // This is intentionally broader than the hooks above, but cannot affect apps, the camera
-        // process, music players, etc. It lets us catch Sony using a direct MediaPlayer path.
-        try {
-            var mediaPlayerClazz = classLoader.loadClass("android.media.MediaPlayer");
-            var method = mediaPlayerClazz.getDeclaredMethod("start");
-            hook(method).intercept(chain -> null);
-            hooks++;
-            log(Log.INFO, TAG, "Muted android.media.MediaPlayer.start in SystemUI");
-        } catch (Throwable t) {
-            log(Log.WARN, TAG, "SystemUI MediaPlayer.start hook unavailable", t);
-        }
-
-        // 5) OEM/forced-shutter fallback. Some screenshot implementations use MediaActionSound
+        // 4) OEM/forced-shutter fallback. Some screenshot implementations use MediaActionSound
         // (SHUTTER_CLICK) instead of MediaPlayer. Again this hook exists only in SystemUI.
         try {
             var mediaActionSoundClazz = classLoader.loadClass("android.media.MediaActionSound");
