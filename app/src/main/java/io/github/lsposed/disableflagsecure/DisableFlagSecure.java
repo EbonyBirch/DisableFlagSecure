@@ -24,6 +24,7 @@ import io.github.libxposed.api.XposedModule;
 @SuppressLint({"PrivateApi", "BlockedPrivateApi"})
 public class DisableFlagSecure extends XposedModule {
     private static final String TAG = "DisableFlagSecure";
+    private static final boolean DEBUG_SCREENSHOT_SOUND = false;
     private static final String SYSTEMUI = "com.android.systemui";
     private static final String OPLUS_APPPLATFORM = "com.oplus.appplatform";
     private static final String OPLUS_SCREENSHOT = "com.oplus.screenshot";
@@ -454,6 +455,12 @@ public class DisableFlagSecure extends XposedModule {
         hookMethods(wmScreenshotControllerClazz, chain -> true, "canBeScreenshotTarget");
     }
 
+    private void debugScreenshotSound(String message) {
+        if (DEBUG_SCREENSHOT_SOUND) {
+            log(Log.INFO, TAG, message);
+        }
+    }
+
     private StackTraceElement findScreenshotSoundCaller() {
         var ownClassName = DisableFlagSecure.class.getName();
 
@@ -500,7 +507,7 @@ public class DisableFlagSecure extends XposedModule {
                         method.getParameterCount() == 0 && method.getReturnType() == void.class) {
                     hook(method).intercept(chain -> null);
                     hooks++;
-                    log(Log.INFO, TAG, "Muted SystemUI screenshot controller method: " + method);
+                    debugScreenshotSound("Muted SystemUI screenshot controller method: " + method);
                 }
             }
         } catch (Throwable t) {
@@ -518,7 +525,7 @@ public class DisableFlagSecure extends XposedModule {
                         method.getParameterCount() == 0 && method.getReturnType() == void.class) {
                     hook(method).intercept(chain -> null);
                     hooks++;
-                    log(Log.INFO, TAG, "Muted SystemUI ScreenshotController method: " + method);
+                    debugScreenshotSound("Muted SystemUI ScreenshotController method: " + method);
                 }
             }
         } catch (Throwable t) {
@@ -532,7 +539,7 @@ public class DisableFlagSecure extends XposedModule {
             var method = providerClazz.getDeclaredMethod("getScreenshotSound");
             hook(method).intercept(chain -> null);
             hooks++;
-            log(Log.INFO, TAG, "Muted ScreenshotSoundProviderImpl.getScreenshotSound");
+            debugScreenshotSound("Muted ScreenshotSoundProviderImpl.getScreenshotSound");
         } catch (Throwable t) {
             log(Log.WARN, TAG, "ScreenshotSoundProviderImpl hook unavailable", t);
         }
@@ -549,14 +556,14 @@ public class DisableFlagSecure extends XposedModule {
             hook(method).intercept(chain -> {
                 var caller = findScreenshotSoundCaller();
                 if (caller != null) {
-                    log(Log.INFO, TAG, "Muted screenshot MediaPlayer.start; caller=" + caller);
+                    debugScreenshotSound("Muted screenshot MediaPlayer.start; caller=" + caller);
                     return null;
                 }
 
                 return chain.proceed();
             });
             hooks++;
-            log(Log.INFO, TAG, "Installed filtered MediaPlayer.start hook in SystemUI");
+            debugScreenshotSound("Installed filtered MediaPlayer.start hook in SystemUI");
         } catch (Throwable t) {
             log(Log.WARN, TAG, "SystemUI MediaPlayer.start hook unavailable", t);
         }
@@ -568,19 +575,19 @@ public class DisableFlagSecure extends XposedModule {
             hook(method).intercept(chain -> {
                 var caller = findScreenshotSoundCaller();
                 if (caller != null) {
-                    log(Log.INFO, TAG, "Muted screenshot MediaActionSound.play; caller=" + caller);
+                    debugScreenshotSound("Muted screenshot MediaActionSound.play; caller=" + caller);
                     return null;
                 }
 
                 return chain.proceed();
             });
             hooks++;
-            log(Log.INFO, TAG, "Installed filtered MediaActionSound.play hook in SystemUI");
+            debugScreenshotSound("Installed filtered MediaActionSound.play hook in SystemUI");
         } catch (Throwable t) {
             log(Log.WARN, TAG, "SystemUI MediaActionSound.play hook unavailable", t);
         }
 
-        log(Log.INFO, TAG, "Screenshot sound suppression hooks installed: " + hooks);
+        debugScreenshotSound("Screenshot sound suppression hooks installed: " + hooks);
     }
 
     private void hookMethods(Class<?> clazz, Hooker hooker, String... names) {
